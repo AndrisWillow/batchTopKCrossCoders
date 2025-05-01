@@ -12,7 +12,7 @@ from dictionary_learning.trainers.crosscoder import (
     CrossCoderTrainer,
     BatchTopKCrossCoderTrainer,
 )
-from training import trainSAE, trainSaeWBuffer
+from training import trainSaeWBuffer
 from dictionary_learning.dictionary import LossType, BatchTopKCrossCoder
 import os
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--pretrained", type=str, default=None)
     parser.add_argument("--encoder-layers", type=int, default=None, nargs="+")
     parser.add_argument("--num-samples", type=int, default=100_000_000)
-    parser.add_argument("--num-validation-samples", type=int, default=2_000_000)
+    parser.add_argument("--num-validation-samples", type=int, default=2_000_000) # 2_000_000
     parser.add_argument("--text-column", type=str, default="text")
     parser.add_argument("--no-train-shuffle", action="store_true")
     parser.add_argument("--local-shuffling", action="store_true")
@@ -214,7 +214,7 @@ if __name__ == "__main__":
             lmsys_split="validation" + lmsys_split_suffix,
             fineweb_split="validation" + fineweb_split_suffix,
         )
-        num_validation_samples = args.num_validation_samples // 2
+        # num_validation_samples = args.num_validation_samples // 2
         # validation_dataset = th.utils.data.ConcatDataset(
         #     [
         #         th.utils.data.Subset(
@@ -354,11 +354,11 @@ if __name__ == "__main__":
     # Buffer params
     from buffer import Buffer
     from transformer_lens import HookedTransformer
-     
+    print("Loading models")
     model_A = HookedTransformer.from_pretrained(
         args.base_model, 
         device=device,
-        # dtype=th.bfloat16, for testing
+        # dtype=th.bfloat16, #for testing
     )
 
     model_B = HookedTransformer.from_pretrained(
@@ -367,7 +367,7 @@ if __name__ == "__main__":
         # dtype=th.bfloat16, 
     )
     MODEL_HOOKPOINT = "blocks.13.hook_resid_pre"
-
+    print("Loading tokens")
     all_tokens= load_pretokenized_HF_dataset(args.hf_dataset_name, args.hf_profile_name) # add as params or from constants?
     buffer_cfg = {
         "seq_len": 1024, # Maximum context length the model is trained on; More would be better
@@ -377,16 +377,24 @@ if __name__ == "__main__":
         # Buffer settings
         "buffer_mult": 128, 
         "model_batch_size": 4, # Number of token-chunks to process per refresh loop
+        "seed": args.seed, # For shuffling
     }
 
-
     buffer = Buffer(buffer_cfg, model_A, model_B, all_tokens)
+
+    # ----------- Validation buffer -----------------
+
+    # Slicing last num_validation_samples as validation data
+    # The datasets have way more tokens then we are training on so there should be no overlap    
+    val_tokens = all_tokens[-args.num_validation_samples:] 
+    val_buffer_cfg = { **buffer_cfg} # For now same
+    val_buffer = Buffer(val_buffer_cfg, model_A, model_B, val_tokens)
 
     ae = trainSaeWBuffer(
         trainer_config=trainer_cfg,
         buffer = buffer,
-        # validate_every_n_steps=args.validate_every_n_steps,
-        # validation_data=validation_dataloader,
+        validate_every_n_steps=args.validate_every_n_steps,
+        validation_buffer=val_buffer,
         use_wandb=not args.disable_wandb,
         wandb_entity=args.wandb_entity,
         wandb_project=args.wandb_project,

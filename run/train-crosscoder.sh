@@ -3,7 +3,7 @@
 set -x
 
 SPLIT=train
-BATCH_SIZE=2048
+BATCH_SIZE=4096 # 4096
 # Model configuration
 ACTIVATION_DIR="$DATASTORE/activations/"
 LAYER=13
@@ -35,7 +35,9 @@ FLAGS="--activation-store-dir $ACTIVATION_DIR \
 --seed 42 \
 --use-buffer \
 --k 50 \
---num-samples 10_000"
+--num-samples 400_000_000
+--num-validation-samples 2_000_000" # 400_000_000
+
 
 
 # Only add default mu if not provided in command line arguments

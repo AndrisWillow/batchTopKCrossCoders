@@ -82,16 +82,17 @@ class Buffer:
         # Estimate scaling factors for both models using a subset of the token data.
         # This uses only 'n_batches_for_norm_estimate' (default 100) batches,
         # not the entire (possibly huge) dataset.
-        estimated_norm_scaling_factor_A = self.estimate_norm_scaling_factor(cfg["model_batch_size"], model_A)
-        estimated_norm_scaling_factor_B = self.estimate_norm_scaling_factor(cfg["model_batch_size"], model_B)
+        if self.normalize == True:
+            estimated_norm_scaling_factor_A = self.estimate_norm_scaling_factor(cfg["model_batch_size"], model_A)
+            estimated_norm_scaling_factor_B = self.estimate_norm_scaling_factor(cfg["model_batch_size"], model_B)
+            
+            self.normalisation_factor = torch.tensor(
+                [estimated_norm_scaling_factor_A, estimated_norm_scaling_factor_B],
+                device=cfg["device"],
+                dtype=torch.float32,
+            )
         
-        self.normalisation_factor = torch.tensor(
-            [estimated_norm_scaling_factor_A, estimated_norm_scaling_factor_B],
-            device=cfg["device"],
-            dtype=torch.float32,
-        )
-        
-        # Optionally refresh (populate) the buffer if desired.
+        # Refresh buffer, disable if you want a hacky way of just getting norm scaling factors
         if refresh_buffer:
             self.refresh()
 
@@ -157,7 +158,6 @@ class Buffer:
                 # Stack activations from both models; expected shape: [2, batch, seq_len, d_model].
                 acts = torch.stack([cache_A[self.cfg["hook_point"]], cache_B[self.cfg["hook_point"]]], dim=0)
                 
-                # We no longer drop the BOS token.
                 assert acts.shape == (2, tokens.shape[0], tokens.shape[1], self.model_A.cfg.d_model)
                 
                 # Rearrange from [2, batch, seq_len, d_model] to [(batch * seq_len), 2, d_model].
@@ -171,6 +171,8 @@ class Buffer:
                 self.token_pointer += self.cfg["model_batch_size"]
         # Reset pointer and shuffle the buffer to randomize order.
         self.pointer = 0
+        # TODO add shuffle flag as for validation shufflings is redundant 
+        torch.cuda.manual_seed_all(self.cfg["seed"])
         self.buffer = self.buffer[torch.randperm(self.buffer.shape[0]).to(self.cfg["device"])]
 
     @torch.no_grad()

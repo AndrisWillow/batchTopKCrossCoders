@@ -12,7 +12,7 @@ import json
 import os
 from collections import defaultdict
 import torch as t
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 import wandb
 
@@ -107,9 +107,10 @@ def log_stats(
 @t.no_grad()
 def run_validation(
     trainer,
-    validation_data,
-    step: int = None,
+    validation_buffer,
+    step: int = None, # Training step
 ):
+    val_steps = len(validation_buffer.all_tokens) // validation_buffer.cfg["batch_size"] # Can we access all toekns len
     l0 = []
     frac_variance_explained = []
     frac_variance_explained_per_feature = []
@@ -118,8 +119,10 @@ def run_validation(
         trainer, BatchTopKCrossCoderTrainer
     ):
         frac_variance_explained_per_layer = defaultdict(list)
-    for val_step, act in enumerate(tqdm(validation_data, total=len(validation_data))):
-        act = act.to(trainer.device)
+    # Implement with buffer
+    
+    for val_step in trange(val_steps):
+        act = validation_buffer.next().to(trainer.device)
         stats = get_stats(trainer, act, deads_sum=False)
         l0.append(stats["l0"])
         if "frac_deads" in stats:
@@ -183,128 +186,127 @@ def save_model(trainer, checkpoint_name, save_dir):
         t.save(model.state_dict(), os.path.join(save_dir, checkpoint_name))
 
 
-def trainSAE(
-    data,
-    trainer_config,
-    use_wandb=False,
-    wandb_entity="",
-    wandb_project="",
-    steps=None,
-    save_steps=None,
-    save_dir=None,
-    log_steps=None,
-    activations_split_by_head=False,
-    validate_every_n_steps=None,
-    validation_data=None,
-    transcoder=False,
-    run_cfg={},
-    end_of_step_logging_fn=None,
-    save_last_eval=True,
-    start_of_training_eval=False,
-):
-    """
-    Train SAE using the given trainer
-    """
-    assert not (
-        validation_data is None and validate_every_n_steps is not None
-    ), "Must provide validation data if validate_every_n_steps is not None"
+# def trainSAE(
+#     data,
+#     trainer_config,
+#     validation_buffer,
+#     use_wandb=False,
+#     wandb_entity="",
+#     wandb_project="",
+#     steps=None,
+#     save_steps=None,
+#     save_dir=None,
+#     log_steps=None,
+#     activations_split_by_head=False,
+#     validate_every_n_steps=None,
+#     transcoder=False,
+#     run_cfg={},
+#     end_of_step_logging_fn=None,
+#     save_last_eval=True,
+#     start_of_training_eval=False,
+# ):
+#     """
+#     Train SAE using the given trainer
+#     """
+#     validate_every_n_steps = None # For now
+#     assert not (
+#         validation_buffer is None and validate_every_n_steps is not None
+#     ), "Must provide validation data if validate_every_n_steps is not None"
 
-    trainer_class = trainer_config["trainer"]
-    del trainer_config["trainer"]
-    trainer = trainer_class(**trainer_config)
+#     trainer_class = trainer_config["trainer"]
+#     del trainer_config["trainer"]
+#     trainer = trainer_class(**trainer_config)
 
-    wandb_config = trainer.config | run_cfg
-    wandb.init(
-        entity=wandb_entity,
-        project=wandb_project,
-        config=wandb_config,
-        name=wandb_config["wandb_name"],
-        mode="disabled" if not use_wandb else "online",
-    )
+#     wandb_config = trainer.config | run_cfg
+#     wandb.init(
+#         entity=wandb_entity,
+#         project=wandb_project,
+#         config=wandb_config,
+#         name=wandb_config["wandb_name"],
+#         mode="disabled" if not use_wandb else "online",
+#     )
 
-    # make save dir, export config
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-        # save config
-        config = {"trainer": trainer.config}
-        try:
-            config["buffer"] = data.config
-        except:
-            pass
-        with open(os.path.join(save_dir, "config.json"), "w") as f:
-            json.dump(config, f, indent=4)
+#     # make save dir, export config
+#     if save_dir is not None:
+#         os.makedirs(save_dir, exist_ok=True)
+#         # save config
+#         config = {"trainer": trainer.config}
+#         try:
+#             config["buffer"] = data.config
+#         except:
+#             pass
+#         with open(os.path.join(save_dir, "config.json"), "w") as f:
+#             json.dump(config, f, indent=4)
 
-    for step, act in enumerate(tqdm(data, total=steps)):
-        if steps is not None and step >= steps:
-            break
-        act = act.to(trainer.device)
-        # logging
-        if log_steps is not None and step % log_steps == 0 and step != 0:
-            with t.no_grad():
-                log_stats(
-                    trainer,
-                    step,
-                    act,
-                    activations_split_by_head,
-                    transcoder,
-                    use_threshold=False,
-                )
-                if isinstance(trainer, BatchTopKCrossCoderTrainer):
-                    log_stats(
-                        trainer,
-                        step,
-                        act,
-                        activations_split_by_head,
-                        transcoder,
-                        use_threshold=True,
-                        stage="trainthres",
-                    )
+#     for step, act in enumerate(tqdm(data, total=steps)):
+#         if steps is not None and step >= steps:
+#             break
+#         act = act.to(trainer.device)
+#         # logging
+#         if log_steps is not None and step % log_steps == 0 and step != 0:
+#             with t.no_grad():
+#                 log_stats(
+#                     trainer,
+#                     step,
+#                     act,
+#                     activations_split_by_head,
+#                     transcoder,
+#                     use_threshold=False,
+#                 )
+#                 if isinstance(trainer, BatchTopKCrossCoderTrainer):
+#                     log_stats(
+#                         trainer,
+#                         step,
+#                         act,
+#                         activations_split_by_head,
+#                         transcoder,
+#                         use_threshold=True,
+#                         stage="trainthres",
+#                     )
 
-        # saving
-        if save_steps is not None and step % save_steps == 0:
-            print(f"Saving at step {step}")
-            if save_dir is not None:
-                save_model(trainer, f"checkpoint_{step}.pt", save_dir)
+#         # saving
+#         if save_steps is not None and step % save_steps == 0:
+#             print(f"Saving at step {step}")
+#             if save_dir is not None:
+#                 save_model(trainer, f"checkpoint_{step}.pt", save_dir)
 
-        # training
-        trainer.update(step, act)
+#         # training
+#         trainer.update(step, act)
 
-        if (
-            validate_every_n_steps is not None
-            and step % validate_every_n_steps == 0
-            and (start_of_training_eval or step > 0)
-        ):
-            print(f"Validating at step {step}")
-            logs = run_validation(trainer, validation_data, step=step)
-            try:
-                os.makedirs(save_dir, exist_ok=True)
-                t.save(logs, os.path.join(save_dir, f"eval_logs_{step}.pt"))
-            except:
-                pass
+#         if (
+#             validate_every_n_steps is not None
+#             and step % validate_every_n_steps == 0
+#             and (start_of_training_eval or step > 0)
+#         ):
+#             print(f"Validating at step {step}")
+#             logs = run_validation(trainer, validation_buffer, step=step)
+#             try:
+#                 os.makedirs(save_dir, exist_ok=True)
+#                 t.save(logs, os.path.join(save_dir, f"eval_logs_{step}.pt"))
+#             except:
+#                 pass
 
-        if end_of_step_logging_fn is not None:
-            end_of_step_logging_fn(trainer, step)
-    try:
-        last_eval_logs = run_validation(trainer, validation_data, step=step)
-        if save_last_eval:
-            os.makedirs(save_dir, exist_ok=True)
-            t.save(last_eval_logs, os.path.join(save_dir, f"last_eval_logs.pt"))
-    except Exception as e:
-        print(f"Error during final validation: {str(e)}")
+#         if end_of_step_logging_fn is not None:
+#             end_of_step_logging_fn(trainer, step)
+#     try:
+#         last_eval_logs = run_validation(trainer, validation_buffer, step=step)
+#         if save_last_eval:
+#             os.makedirs(save_dir, exist_ok=True)
+#             t.save(last_eval_logs, os.path.join(save_dir, f"last_eval_logs.pt"))
+#     except Exception as e:
+#         print(f"Error during final validation: {str(e)}")
 
-    # save final SAE
-    if save_dir is not None:
-        save_model(trainer, f"model_final.pt", save_dir)
+#     # save final SAE
+#     if save_dir is not None:
+#         save_model(trainer, f"model_final.pt", save_dir)
 
-    if use_wandb:
-        wandb.finish()
+#     if use_wandb:
+#         wandb.finish()
 
 def trainSaeWBuffer(
-    # data,
     trainer_config,
-    # Buffer params
     buffer,
-    ###############
+    validation_buffer,
     use_wandb=False,
     wandb_entity="",
     wandb_project="",
@@ -314,7 +316,6 @@ def trainSaeWBuffer(
     log_steps=None,
     activations_split_by_head=False,
     validate_every_n_steps=None,
-    validation_data=None,
     transcoder=False,
     run_cfg={},
     end_of_step_logging_fn=None,
@@ -327,7 +328,7 @@ def trainSaeWBuffer(
     Train SAE using the given trainer
     """
     assert not (
-        validation_data is None and validate_every_n_steps is not None
+        validation_buffer is None and validate_every_n_steps is not None
     ), "Must provide validation data if validate_every_n_steps is not None"
 
     trainer_class = trainer_config["trainer"]
@@ -351,81 +352,54 @@ def trainSaeWBuffer(
         with open(os.path.join(save_dir, "config.json"), "w") as f:
             json.dump(config, f, indent=4)
 
-    # for step, act in enumerate(tqdm(data, total=steps)):
-    for step in tqdm.trange(steps):
-        # Add similar check?
-        # if steps is not None and step >= steps:
-        #     break
-
-        acts = buffer.next()
-        # Acts to trainer device?
-        # Do another for loop for each act? Each step is meant to be sinuglar act?
-        for act in acts:
-            # acts from buffer come like this:
-
-            #  self.buffer = torch.zeros(
-            #     (self.buffer_size, 2, model_A.cfg.d_model),
-            #     dtype=torch.bfloat16,
-            #     requires_grad=False,
-            # ).to(cfg["device"])
-
-            # How is act expected here? trainer knows
-            act = act.to(trainer.device)
-            # logging
-            if log_steps is not None and step % log_steps == 0 and step != 0:
-                with t.no_grad():
+    for step in trange(steps):
+        act = buffer.next().to(trainer.device)
+        if log_steps is not None and step % log_steps == 0 and step != 0:
+            with t.no_grad():
+                log_stats(
+                    trainer,
+                    step,
+                    act,
+                    activations_split_by_head,
+                    transcoder,
+                    use_threshold=False,
+                )
+                if isinstance(trainer, BatchTopKCrossCoderTrainer):
                     log_stats(
                         trainer,
                         step,
                         act,
-                        activations_split_by_head,
-                        transcoder,
-                        use_threshold=False,
+                        activations_split_by_head, # What is that?
+                        transcoder, 
+                        use_threshold=True,
+                        stage="trainthres",
                     )
-                    if isinstance(trainer, BatchTopKCrossCoderTrainer):
-                        log_stats(
-                            trainer,
-                            step,
-                            act,
-                            activations_split_by_head, # What is that?
-                            transcoder, 
-                            use_threshold=True,
-                            stage="trainthres",
-                        )
 
-            # saving
-            if save_steps is not None and step % save_steps == 0:
-                print(f"Saving at step {step}")
-                if save_dir is not None:
-                    save_model(trainer, f"checkpoint_{step}.pt", save_dir)
+        # saving
+        if save_steps is not None and step % save_steps == 0:
+            print(f"Saving at step {step}")
+            if save_dir is not None:
+                save_model(trainer, f"checkpoint_{step}.pt", save_dir)
 
-            # training
-            # Trainer expects singular act
-        # class BatchTopKCrossCoderTrainer(SAETrainer):
-        #             self.ae = dict_class(
-                #     activation_dim, dict_size, num_layers, k, **dict_class_kwargs
-                # ) From this I gather the act is expected in 2 layers as the buffer provides
-                # We just need to pass a singular act?
+        trainer.update(step, act)
 
-            trainer.update(step, act)
+        if (
+            validate_every_n_steps is not None
+            and step % validate_every_n_steps == 0
+            and (start_of_training_eval or step > 0)
+        ):
+            print(f"Validating at step {step}")
+            logs = run_validation(trainer, validation_buffer, step=step)
+            try:
+                os.makedirs(save_dir, exist_ok=True)
+                t.save(logs, os.path.join(save_dir, f"eval_logs_{step}.pt"))
+            except:
+                pass
 
-            if (
-                validate_every_n_steps is not None
-                and step % validate_every_n_steps == 0
-                and (start_of_training_eval or step > 0)
-            ):
-                print(f"Validating at step {step}")
-                logs = run_validation(trainer, validation_data, step=step)
-                try:
-                    os.makedirs(save_dir, exist_ok=True)
-                    t.save(logs, os.path.join(save_dir, f"eval_logs_{step}.pt"))
-                except:
-                    pass
-
-            if end_of_step_logging_fn is not None:
-                end_of_step_logging_fn(trainer, step)
+        if end_of_step_logging_fn is not None:
+            end_of_step_logging_fn(trainer, step)
     try:
-        last_eval_logs = run_validation(trainer, validation_data, step=step)
+        last_eval_logs = run_validation(trainer, validation_buffer, step=step)
         if save_last_eval:
             os.makedirs(save_dir, exist_ok=True)
             t.save(last_eval_logs, os.path.join(save_dir, f"last_eval_logs.pt"))
