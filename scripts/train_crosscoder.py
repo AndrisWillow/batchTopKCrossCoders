@@ -12,7 +12,7 @@ from dictionary_learning.trainers.crosscoder import (
     CrossCoderTrainer,
     BatchTopKCrossCoderTrainer,
 )
-from dictionary_learning.training import trainSAE
+from training import trainSAE, trainSaeWBuffer
 from dictionary_learning.dictionary import LossType, BatchTopKCrossCoder
 import os
 
@@ -23,7 +23,7 @@ wandb.require("legacy-service")
 th.set_float32_matmul_precision("high")
 
 from tools.utils import load_activation_dataset
-
+from buffer import load_pretokenized_HF_dataset
 
 def get_local_shuffled_indices(num_samples_per_dataset, shard_size):
     num_shards_per_dataset = num_samples_per_dataset // shard_size + (
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     parser.add_argument("--base-model", type=str, default="google/gemma-2-2b")
     parser.add_argument("--chat-model", type=str, default="google/gemma-2-2b-it")
     parser.add_argument("--layer", type=int, default=13)
-    parser.add_argument("--wandb-entity", type=str, default="jkminder")
+    parser.add_argument("--wandb-entity", type=str, default="andris-willow-")
     parser.add_argument("--disable-wandb", action="store_true")
     parser.add_argument("--expansion-factor", type=int, default=32)
     parser.add_argument("--batch-size", type=int, default=2048)
@@ -100,6 +100,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--type", type=str, default="relu", choices=["batch-top-k", "relu"]
     )
+    parser.add_argument(
+        "--wandb-project", type=str, default="BatchTopKCrosscoders"
+    )
+
+    #### Buffer args
+    # We are using hooked models - https://transformerlensorg.github.io/TransformerLens/generated/model_properties_table.html
+    parser.add_argument(
+        "--use-buffer", action="store_true"
+    )
+    parser.add_argument(
+        "--hf-dataset-name", type=str, default="Pile-Lmsys-1m-tokenized-1024-Qwen2.5-WTemplTok" 
+    )
+    parser.add_argument(
+        "--hf-profile-name", type=str, default="AndrisWillow" 
+    )
 
     args = parser.parse_args()
 
@@ -107,106 +122,112 @@ if __name__ == "__main__":
     th.manual_seed(args.seed)
     th.cuda.manual_seed_all(args.seed)
 
-    if args.text_column == "text":
-        lmsys_split_suffix = ""
-        fineweb_split_suffix = ""
-    else:
-        lmsys_split_suffix = f"-col{args.text_column}"
-        fineweb_split_suffix = ""
-
-    activation_store_dir = Path(args.activation_store_dir)
-
-    submodule_name = f"layer_{args.layer}_out"
-
-    # Setup paths
-    # Load validation dataset
-    activation_store_dir = Path(args.activation_store_dir)
-
-    base_model_stub = args.base_model.split("/")[-1]
-    chat_model_stub = args.chat_model.split("/")[-1]
-    fineweb_cache, lmsys_cache = load_activation_dataset(
-        activation_store_dir,
-        base_model=base_model_stub,
-        instruct_model=chat_model_stub,
-        layer=args.layer,
-        lmsys_split="train" + lmsys_split_suffix,
-        fineweb_split="train" + fineweb_split_suffix,
-    )
-    num_samples_per_dataset = args.num_samples // 2
-    num_samples_per_dataset = min(num_samples_per_dataset, len(fineweb_cache))
-    num_samples_per_dataset = min(num_samples_per_dataset, len(lmsys_cache))
-    train_dataset = th.utils.data.ConcatDataset(
-        [
-            th.utils.data.Subset(fineweb_cache, th.arange(0, num_samples_per_dataset)),
-            th.utils.data.Subset(lmsys_cache, th.arange(0, num_samples_per_dataset)),
-        ]
-    )
-
-    if args.local_shuffling:
-        print(
-            "Using local shuffling to optimize for cache locality while allowing randomization",
-            flush=True,
-        )
-        # Create interleaved dataset of fineweb and lmsys samples
-
-        # Shuffle within 1M sample shards while maintaining interleaving
-        shard_size = lmsys_cache.activation_cache_1.config["shard_size"]
-        num_shards_per_dataset = num_samples_per_dataset // shard_size + (
-            1 if num_samples_per_dataset % shard_size != 0 else 0
-        )
-        print(f"Number of shards per dataset: {num_shards_per_dataset}", flush=True)
-
-        shuffled_indices = []
-        if args.epochs > 1:
-            print(f"Using {args.epochs} epochs of local shuffling.", flush=True)
-            for i in range(args.epochs):
-                shuffled_indices.append(
-                    get_local_shuffled_indices(num_samples_per_dataset, shard_size)
-                )
-            shuffled_indices = th.cat(shuffled_indices)
+    if args.use_buffer == False: 
+        if args.text_column == "text":
+            lmsys_split_suffix = ""
+            fineweb_split_suffix = ""
         else:
-            shuffled_indices = get_local_shuffled_indices(
-                num_samples_per_dataset, shard_size
-            )
-        print(f"Shuffled indices: {shuffled_indices.shape}", flush=True)
-        train_dataset = th.utils.data.Subset(train_dataset, shuffled_indices)
-        print(f"Shuffled train dataset with {len(train_dataset)} samples.", flush=True)
-        args.no_train_shuffle = True
-    else:
-        assert (
-            args.epochs == 1
-        ), "Only one epoch of shuffling is supported if local shuffling is disabled."
+            lmsys_split_suffix = f"-col{args.text_column}"
+            fineweb_split_suffix = ""
+
+        activation_store_dir = Path(args.activation_store_dir)
+
+        submodule_name = f"layer_{args.layer}_out"
+
+        # Setup paths
+        # Load validation dataset
+        activation_store_dir = Path(args.activation_store_dir)
+
+        base_model_stub = args.base_model.split("/")[-1]
+        chat_model_stub = args.chat_model.split("/")[-1]
+        fineweb_cache, lmsys_cache = load_activation_dataset(
+            activation_store_dir,
+            base_model=base_model_stub,
+            instruct_model=chat_model_stub,
+            layer=args.layer,
+            lmsys_split="train" + lmsys_split_suffix,
+            fineweb_split="train" + fineweb_split_suffix,
+        )
+        num_samples_per_dataset = args.num_samples // 2
+        num_samples_per_dataset = min(num_samples_per_dataset, len(fineweb_cache))
+        num_samples_per_dataset = min(num_samples_per_dataset, len(lmsys_cache))
         train_dataset = th.utils.data.ConcatDataset(
             [
-                th.utils.data.Subset(
-                    fineweb_cache, th.arange(0, num_samples_per_dataset)
-                ),
-                th.utils.data.Subset(
-                    lmsys_cache, th.arange(0, num_samples_per_dataset)
-                ),
+                th.utils.data.Subset(fineweb_cache, th.arange(0, num_samples_per_dataset)),
+                th.utils.data.Subset(lmsys_cache, th.arange(0, num_samples_per_dataset)),
             ]
         )
 
-    activation_dim = train_dataset[0].shape[1]
-    dictionary_size = args.expansion_factor * activation_dim
+        if args.local_shuffling:
+            print(
+                "Using local shuffling to optimize for cache locality while allowing randomization",
+                flush=True,
+            )
+            # Create interleaved dataset of fineweb and lmsys samples
 
-    fineweb_cache_val, lmsys_cache_val = load_activation_dataset(
-        activation_store_dir,
-        base_model=base_model_stub,
-        instruct_model=chat_model_stub,
-        layer=args.layer,
-        lmsys_split="validation" + lmsys_split_suffix,
-        fineweb_split="validation" + fineweb_split_suffix,
-    )
-    num_validation_samples = args.num_validation_samples // 2
-    validation_dataset = th.utils.data.ConcatDataset(
-        [
-            th.utils.data.Subset(
-                fineweb_cache_val, th.arange(0, num_validation_samples)
-            ),
-            th.utils.data.Subset(lmsys_cache_val, th.arange(0, num_validation_samples)),
-        ]
-    )
+            # Shuffle within 1M sample shards while maintaining interleaving
+            shard_size = lmsys_cache.activation_cache_1.config["shard_size"]
+            num_shards_per_dataset = num_samples_per_dataset // shard_size + (
+                1 if num_samples_per_dataset % shard_size != 0 else 0
+            )
+            print(f"Number of shards per dataset: {num_shards_per_dataset}", flush=True)
+
+            shuffled_indices = []
+            if args.epochs > 1:
+                print(f"Using {args.epochs} epochs of local shuffling.", flush=True)
+                for i in range(args.epochs):
+                    shuffled_indices.append(
+                        get_local_shuffled_indices(num_samples_per_dataset, shard_size)
+                    )
+                shuffled_indices = th.cat(shuffled_indices)
+            else:
+                shuffled_indices = get_local_shuffled_indices(
+                    num_samples_per_dataset, shard_size
+                )
+            print(f"Shuffled indices: {shuffled_indices.shape}", flush=True)
+            train_dataset = th.utils.data.Subset(train_dataset, shuffled_indices)
+            print(f"Shuffled train dataset with {len(train_dataset)} samples.", flush=True)
+            args.no_train_shuffle = True
+        else:
+            assert (
+                args.epochs == 1
+            ), "Only one epoch of shuffling is supported if local shuffling is disabled."
+            train_dataset = th.utils.data.ConcatDataset(
+                [
+                    th.utils.data.Subset(
+                        fineweb_cache, th.arange(0, num_samples_per_dataset)
+                    ),
+                    th.utils.data.Subset(
+                        lmsys_cache, th.arange(0, num_samples_per_dataset)
+                    ),
+                ]
+            )
+
+        activation_dim = train_dataset[0].shape[1]
+        dictionary_size = args.expansion_factor * activation_dim
+
+        fineweb_cache_val, lmsys_cache_val = load_activation_dataset(
+            activation_store_dir,
+            base_model=base_model_stub,
+            instruct_model=chat_model_stub,
+            layer=args.layer,
+            lmsys_split="validation" + lmsys_split_suffix,
+            fineweb_split="validation" + fineweb_split_suffix,
+        )
+        num_validation_samples = args.num_validation_samples // 2
+        # validation_dataset = th.utils.data.ConcatDataset(
+        #     [
+        #         th.utils.data.Subset(
+        #             fineweb_cache_val, th.arange(0, num_validation_samples)
+        #         ),
+        #         th.utils.data.Subset(lmsys_cache_val, th.arange(0, num_validation_samples)),
+        #     ]
+        # )
+
+    # TODO set as args
+    # Act dim  from https://transformerlensorg.github.io/TransformerLens/generated/model_properties_table.html
+    activation_dim = 896
+    dictionary_size = args.expansion_factor * activation_dim
 
     sparsity_type = LossType.from_string(args.sparsity_type)
     if args.type == "relu":
@@ -230,7 +251,7 @@ if __name__ == "__main__":
     if args.pretrained is not None:
         name += f"-pt"
     if args.max_steps is None:
-        args.max_steps = len(train_dataset) // args.batch_size
+        args.max_steps = args.num_samples // args.batch_size
     device = "cuda" if th.cuda.is_available() else "cpu"
     print(f"Training on device={device}.")
     print(f"Loss type: {sparsity_type}")
@@ -298,32 +319,77 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Invalid sparsity type: {args.sparsity_type}")
 
-    print(f"Training on {len(train_dataset)} token activations.")
-    dataloader = th.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        # Nora said shuffling doesn't matter
-        shuffle=not args.no_train_shuffle,
-        num_workers=args.workers,
-        pin_memory=True,
-    )
-    validation_dataloader = th.utils.data.DataLoader(
-        validation_dataset,
-        batch_size=4096,
-        shuffle=False,
-        num_workers=args.workers,
-        pin_memory=True,
-    )
+    # print(f"Training on {len(train_dataset)} token activations.")
+    # dataloader = th.utils.data.DataLoader(
+    #     train_dataset,
+    #     batch_size=args.batch_size,
+    #     # Nora said shuffling doesn't matter
+    #     shuffle=not args.no_train_shuffle,
+    #     num_workers=args.workers,
+    #     pin_memory=True,
+    # )
+    # validation_dataloader = th.utils.data.DataLoader(
+    #     validation_dataset,
+    #     batch_size=4096,
+    #     shuffle=False,
+    #     num_workers=args.workers,
+    #     pin_memory=True,
+    # )
 
     # train the sparse autoencoder (SAE)
-    ae = trainSAE(
-        data=dataloader,
+    # ae = trainSAE(
+    #     data=dataloader,
+    #     trainer_config=trainer_cfg,
+    #     # validate_every_n_steps=args.validate_every_n_steps,
+    #     # validation_data=validation_dataloader,
+    #     use_wandb=not args.disable_wandb,
+    #     wandb_entity=args.wandb_entity,
+    #     wandb_project="crosscoder",
+    #     log_steps=50,
+    #     save_dir=f"checkpoints/{name}",
+    #     steps=args.max_steps,
+    #     save_steps=args.validate_every_n_steps,
+    # )
+
+    # Buffer params
+    from buffer import Buffer
+    from transformer_lens import HookedTransformer
+     
+    model_A = HookedTransformer.from_pretrained(
+        args.base_model, 
+        device=device,
+        # dtype=th.bfloat16, for testing
+    )
+
+    model_B = HookedTransformer.from_pretrained(
+        args.chat_model, 
+        device=device,
+        # dtype=th.bfloat16, 
+    )
+    MODEL_HOOKPOINT = "blocks.13.hook_resid_pre"
+
+    all_tokens= load_pretokenized_HF_dataset(args.hf_dataset_name, args.hf_profile_name) # add as params or from constants?
+    buffer_cfg = {
+        "seq_len": 1024, # Maximum context length the model is trained on; More would be better
+        "batch_size": args.batch_size, # Larger size makes for better gradient stability, lower gives more frequent gradient updates, but might decrease training stability
+        "device": device,
+        "hook_point": MODEL_HOOKPOINT,
+        # Buffer settings
+        "buffer_mult": 128, 
+        "model_batch_size": 4, # Number of token-chunks to process per refresh loop
+    }
+
+
+    buffer = Buffer(buffer_cfg, model_A, model_B, all_tokens)
+
+    ae = trainSaeWBuffer(
         trainer_config=trainer_cfg,
-        validate_every_n_steps=args.validate_every_n_steps,
-        validation_data=validation_dataloader,
+        buffer = buffer,
+        # validate_every_n_steps=args.validate_every_n_steps,
+        # validation_data=validation_dataloader,
         use_wandb=not args.disable_wandb,
         wandb_entity=args.wandb_entity,
-        wandb_project="crosscoder",
+        wandb_project=args.wandb_project,
         log_steps=50,
         save_dir=f"checkpoints/{name}",
         steps=args.max_steps,
