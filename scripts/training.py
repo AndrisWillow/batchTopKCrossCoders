@@ -13,7 +13,7 @@ import os
 from collections import defaultdict
 import torch as t
 from tqdm import tqdm, trange
-
+from enum import Enum
 import wandb
 
 from dictionary_learning.trainers.crosscoder import CrossCoderTrainer, BatchTopKCrossCoderTrainer
@@ -350,7 +350,7 @@ def trainSaeWBuffer(
         # save config
         config = {"trainer": trainer.config}
         with open(os.path.join(save_dir, "config.json"), "w") as f:
-            json.dump(config, f, indent=4)
+            json.dump(config,f,indent=4,default=lambda o: o.name if isinstance(o, Enum) else str(o))
 
     for step in trange(steps):
         act = buffer.next().to(trainer.device)

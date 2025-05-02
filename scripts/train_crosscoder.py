@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--mu", type=float, default=1e-1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-steps", type=int, default=None)
-    parser.add_argument("--validate-every-n-steps", type=int, default=10000)
+    parser.add_argument("--validate-every-n-steps", type=int, default=10_000)
     parser.add_argument("--same-init-for-all-layers", action="store_true")
     parser.add_argument("--norm-init-scale", type=float, default=0.005)
     parser.add_argument("--init-with-transpose", action="store_true")
@@ -300,6 +300,7 @@ if __name__ == "__main__":
             "wandb_name": name,
             "k": args.k,
             "steps": args.max_steps,
+            # TODO there seems to be an extra sparsity_type added here as an enum that breaks Json encoding
             "auxk_alpha": 1 / 32,
             "dict_class_kwargs": {
                 "same_init_for_all_layers": args.same_init_for_all_layers,

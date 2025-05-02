@@ -35,7 +35,8 @@ FLAGS="--activation-store-dir $ACTIVATION_DIR \
 --seed 42 \
 --use-buffer \
 --k 50 \
---num-samples 400_000_000
+--num-samples 400_000_000 \
+--type batch-top-k \
 --num-validation-samples 2_000_000" # 400_000_000
 
 

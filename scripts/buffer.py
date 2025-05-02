@@ -77,7 +77,7 @@ class Buffer:
         # Initialize pointers and flags.
         self.token_pointer = 0
         self.first = True
-        self.normalize = False 
+        self.normalize = False # Could use false for Gemma 
         
         # Estimate scaling factors for both models using a subset of the token data.
         # This uses only 'n_batches_for_norm_estimate' (default 100) batches,
