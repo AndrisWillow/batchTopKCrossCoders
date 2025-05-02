@@ -22,3 +22,4 @@ interactive.sh
 playground.ipynb
 *.png
 _archive/**
+/scripts/workspace

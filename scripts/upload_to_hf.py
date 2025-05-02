@@ -5,7 +5,7 @@ import shutil
 main_dir = Path(__file__).parent.parent.resolve()
 SAVE_DIR = main_dir / "checkpoints"
 
-model_name = "Qwen2.5-0.5B-L13-k50-lr5e-05-CCLoss"
+model_name = "Llama-3.2-1B-L13-k70-lr5e-05-CCLoss"
 full_model_name = f"AndrisWillow/{model_name}" # to upload
 local_model_dir = Path(f"{SAVE_DIR}/{model_name}")
 files_to_upload = ["model_final.pt", "last_eval_logs.pt", "config.json"]

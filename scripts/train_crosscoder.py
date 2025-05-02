@@ -103,6 +103,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--wandb-project", type=str, default="BatchTopKCrosscoders"
     )
+    parser.add_argument(
+        # We are using hooked models - https://transformerlensorg.github.io/TransformerLens/generated/model_properties_table.html
+        "--activation-dimension", type=int, default=0
+    )
 
     #### Buffer args
     # We are using hooked models - https://transformerlensorg.github.io/TransformerLens/generated/model_properties_table.html
@@ -226,7 +230,7 @@ if __name__ == "__main__":
 
     # TODO set as args
     # Act dim  from https://transformerlensorg.github.io/TransformerLens/generated/model_properties_table.html
-    activation_dim = 896
+    activation_dim = args.activation_dimension 
     dictionary_size = args.expansion_factor * activation_dim
 
     sparsity_type = LossType.from_string(args.sparsity_type)
@@ -320,38 +324,6 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Invalid sparsity type: {args.sparsity_type}")
 
-    # print(f"Training on {len(train_dataset)} token activations.")
-    # dataloader = th.utils.data.DataLoader(
-    #     train_dataset,
-    #     batch_size=args.batch_size,
-    #     # Nora said shuffling doesn't matter
-    #     shuffle=not args.no_train_shuffle,
-    #     num_workers=args.workers,
-    #     pin_memory=True,
-    # )
-    # validation_dataloader = th.utils.data.DataLoader(
-    #     validation_dataset,
-    #     batch_size=4096,
-    #     shuffle=False,
-    #     num_workers=args.workers,
-    #     pin_memory=True,
-    # )
-
-    # train the sparse autoencoder (SAE)
-    # ae = trainSAE(
-    #     data=dataloader,
-    #     trainer_config=trainer_cfg,
-    #     # validate_every_n_steps=args.validate_every_n_steps,
-    #     # validation_data=validation_dataloader,
-    #     use_wandb=not args.disable_wandb,
-    #     wandb_entity=args.wandb_entity,
-    #     wandb_project="crosscoder",
-    #     log_steps=50,
-    #     save_dir=f"checkpoints/{name}",
-    #     steps=args.max_steps,
-    #     save_steps=args.validate_every_n_steps,
-    # )
-
     # Buffer params
     from buffer import Buffer
     from transformer_lens import HookedTransformer
@@ -359,13 +331,11 @@ if __name__ == "__main__":
     model_A = HookedTransformer.from_pretrained(
         args.base_model, 
         device=device,
-        # dtype=th.bfloat16, #for testing
     )
 
     model_B = HookedTransformer.from_pretrained(
         args.chat_model, 
         device=device,
-        # dtype=th.bfloat16, 
     )
     MODEL_HOOKPOINT = "blocks.13.hook_resid_pre"
     print("Loading tokens")

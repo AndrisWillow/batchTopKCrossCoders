@@ -91,7 +91,8 @@ class Buffer:
                 device=cfg["device"],
                 dtype=torch.float32,
             )
-        
+            print(estimated_norm_scaling_factor_A)
+            print(estimated_norm_scaling_factor_B)
         # Refresh buffer, disable if you want a hacky way of just getting norm scaling factors
         if refresh_buffer:
             self.refresh()
