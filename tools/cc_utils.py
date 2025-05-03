@@ -33,7 +33,7 @@ df_hf_repo_legacy = {
 
 
 def stats_repo_id(crosscoder):
-    return f"science-of-finetuning/diffing-stats-{crosscoder}"
+    return f"AndrisWillow/diffing-stats-{crosscoder}"
 
 
 def load_latent_df(crosscoder_or_path=None):
@@ -51,7 +51,7 @@ def load_latent_df(crosscoder_or_path=None):
         # Local model
         df_path = Path(crosscoder_or_path)
     else:
-        repo_id = f"science-of-finetuning/diffing-stats-{crosscoder_or_path}"
+        repo_id = f"AndrisWillow/diffing-stats-{crosscoder_or_path}"
         try:
             df_path = hf_hub_download(
                 repo_id=repo_id,
@@ -172,7 +172,7 @@ def push_latent_df(
         df_hf_repo_legacy.get(crosscoder) if hasattr(df_hf_repo_legacy, "get") else None
     )
     if repo_id is None:
-        repo_id = f"science-of-finetuning/diffing-stats-{crosscoder}"
+        repo_id = f"AndrisWillow/diffing-stats-{crosscoder}"
 
     with TemporaryDirectory() as tmpdir:
         df.to_csv(Path(tmpdir) / "feature_df.csv")
@@ -224,7 +224,7 @@ def push_dictionary_model(model_path: Path):
         model_path: The path to the model to push
     """
     model_name = model_path_to_name(model_path)
-    repo_id = f"science-of-finetuning/{model_name}"
+    repo_id = f"AndrisWillow/{model_name}"
     model_dir = model_path.parent
     config_path = model_dir / "config.json"
 
@@ -438,7 +438,7 @@ def load_dictionary_model(model_name: str | Path):
             model_name = df_hf_repo_legacy[str(model_name)]
         else:
             model_name = str(model_name)
-        model_id = "science-of-finetuning/" + str(model_name)
+        model_id = "AndrisWillow/" + str(model_name)
         # Download config to determine model type
         try:
             config_path = hf_hub_download(
@@ -526,15 +526,15 @@ def online_dashboard(
                 max_acts = df[col].dropna().to_dict()
                 break
     base_model = load_model(
-        "google/gemma-2-2b",
+        "meta-llama/Llama-3.2-1B",
         torch_dtype=torch_dtype,
-        attn_implementation="eager",
+        # attn_implementation="eager",
         device_map=base_device,
     )
     chat_model = load_model(
-        "google/gemma-2-2b-it",
+        "meta-llama/Llama-3.2-1B-Instruct",
         torch_dtype=torch_dtype,
-        attn_implementation="eager",
+        # attn_implementation="eager",
         device_map=chat_device,
     )
     return CrosscoderOnlineFeatureDashboard(
@@ -752,14 +752,14 @@ def offline_dashboard(crosscoder, max_example_per_quantile=20, tokenizer=None):
     return dashboard
 
 
-def get_available_models():
+def get_available_models(author):
     """Fetch CrossCoder models from Hugging Face"""
     try:
         # Initialize the Hugging Face API
         api = HfApi()
 
         # Get models from the science-of-finetuning organization
-        models = api.list_models(author="science-of-finetuning")
+        models = api.list_models(author=author)
 
         # Filter for CrossCoder models (you may need to adjust this filter)
         crosscoder_models = [model.id.split("/")[-1] for model in models]
