@@ -109,6 +109,9 @@ if __name__ == "__main__":
         attn_implementation=MODEL_CONFIGS[args.model]["attn_implementation"],
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model)
+    # Need to define pad token Llama was trained without one
+    tokenizer.pad_token = "<|finetune_right_pad_id|>" # 128004 - Llama3.2 tokenizers special pad token
+    # 
     nnmodel = LanguageModel(model, tokenizer=tokenizer)
     print("dtype=",nnmodel.dtype)
     num_layers = int(len(nnmodel.model.layers))
@@ -149,7 +152,7 @@ if __name__ == "__main__":
         out_dir,
         shuffle_shards=False,
         io="out",
-        shard_size=10**6,
+        shard_size=10**6, # Too big?
         batch_size=args.batch_size,
         context_len=1024,
         d_model=d_model,
