@@ -224,7 +224,7 @@ def compute_quantile_activating_examples(
 
     next_gb = gc_collect_every
     current_seq_idx = 0
-    for tokens, (indices, values) in tqdm(latent_activation_cache):
+    for tokens, (indices, values) in tqdm(latent_activation_cache): 
         iter_start = time.time() if log_time else None
 
         # GC and device transfer timing
@@ -383,13 +383,12 @@ def compute_quantile_activating_examples(
 
 
 # python scripts/collect_max_activating_examples.py gemma-2-2b-L13-k100-lr1e-04-local-shuffling-CCLoss --latent-activation-cache-path /workspace/data/latent_activations
-# python scripts/collect_max_activating_examples.py  gemma-2-2b-crosscoder-l13-mu4.1e-02-lr1e-04 --latent-activation-cache-path /workspace/data/latent_activations
-
+# python scripts/collect_max_activating_examples.py  gemma-2-2b-crosscoder-l13-mu4.1e-02-lr1e-04 --latent-activation-cache-path /workspace/data/latent_activations 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("crosscoder", type=str)
     parser.add_argument("--latent-activation-cache-path", type=Path, required=True)
-    parser.add_argument("--bos-token-id", type=int, default=2)
+    # parser.add_argument("--bos-token-id", type=int, default=2)
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--min-threshold", type=float, default=1e-4)
     parser.add_argument(
@@ -434,7 +433,7 @@ def main():
         wandb.finish()
 
     # Upload to HuggingFace Hub
-    repo = "science-of-finetuning/diffing-stats-" + args.crosscoder
+    repo = "AndrisWillow/diffing-stats-" + args.crosscoder
     if not args.test:
         print(f"Uploading to HuggingFace Hub: {repo}")
         for ftype in ["pt", "db"]:

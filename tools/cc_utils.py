@@ -33,7 +33,7 @@ df_hf_repo_legacy = {
 
 
 def stats_repo_id(crosscoder):
-    return f"science-of-finetuning/diffing-stats-{crosscoder}"
+    return f"AndrisWillow/diffing-stats-{crosscoder}"
 
 
 def load_latent_df(crosscoder_or_path=None):
@@ -51,7 +51,8 @@ def load_latent_df(crosscoder_or_path=None):
         # Local model
         df_path = Path(crosscoder_or_path)
     else:
-        repo_id = f"science-of-finetuning/diffing-stats-{crosscoder_or_path}"
+        print("accessing online repo")
+        repo_id = f"AndrisWillow/diffing-stats-{crosscoder_or_path}"
         try:
             df_path = hf_hub_download(
                 repo_id=repo_id,
@@ -172,7 +173,7 @@ def push_latent_df(
         df_hf_repo_legacy.get(crosscoder) if hasattr(df_hf_repo_legacy, "get") else None
     )
     if repo_id is None:
-        repo_id = f"science-of-finetuning/diffing-stats-{crosscoder}"
+        repo_id = f"AndrisWillow/diffing-stats-{crosscoder}"
 
     with TemporaryDirectory() as tmpdir:
         df.to_csv(Path(tmpdir) / "feature_df.csv")
@@ -224,7 +225,7 @@ def push_dictionary_model(model_path: Path):
         model_path: The path to the model to push
     """
     model_name = model_path_to_name(model_path)
-    repo_id = f"science-of-finetuning/{model_name}"
+    repo_id = f"AndrisWillow/{model_name}"
     model_dir = model_path.parent
     config_path = model_dir / "config.json"
 
@@ -438,7 +439,7 @@ def load_dictionary_model(model_name: str | Path):
             model_name = df_hf_repo_legacy[str(model_name)]
         else:
             model_name = str(model_name)
-        model_id = "science-of-finetuning/" + str(model_name)
+        model_id = "AndrisWillow/" + str(model_name)
         # Download config to determine model type
         try:
             config_path = hf_hub_download(
@@ -758,8 +759,8 @@ def get_available_models():
         # Initialize the Hugging Face API
         api = HfApi()
 
-        # Get models from the science-of-finetuning organization
-        models = api.list_models(author="science-of-finetuning")
+        # Get models from the AndrisWillow organization
+        models = api.list_models(author="AndrisWillow")
 
         # Filter for CrossCoder models (you may need to adjust this filter)
         crosscoder_models = [model.id.split("/")[-1] for model in models]

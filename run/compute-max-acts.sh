@@ -1,5 +1,5 @@
 #! /bin/bash
-
+# For validating crosscoder
 python scripts/compute_max_activation.py \
     --activation-cache-path $DATASTORE/activations \
     --dataset lmsys-chat-1m-chat-formatted \

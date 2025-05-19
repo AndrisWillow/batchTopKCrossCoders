@@ -5,6 +5,7 @@ import tqdm
 import einops
 import numpy as np
 
+# TODO rempliment BOS token masking; BOS token masking is necessary for most models as their norms are much larger than any others
 def load_pretokenized_HF_dataset(HF_DS_NAME, HF_PROFILE_NAME):
     script_dir = Path(__file__).parent.resolve()
     data_dir = script_dir / "workspace" / "data"
@@ -105,7 +106,7 @@ class Buffer:
         For each batch, the L2 norm (averaged over positions and examples) is computed;
         the scaling factor is then determined so that:
             scaling_factor = sqrt(d_model) / mean(norm)
-        This ensures that on average the scaled activations have a norm ~√(d_model).
+        This ensures that on average the scaled activations have a norm sqrt(d_model).
         
         Only n_batches_for_norm_estimate batches are used for efficiency.
         """

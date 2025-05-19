@@ -32,8 +32,8 @@ def load_activation_dataset(
     split="validation",
     lmsys_split: str = None,
     fineweb_split: str = None,
-    lmsys_name: str = "lmsys-chat-1m-chat-formatted",
-    fineweb_name: str = "fineweb-1m-sample",
+    lmsys_name: str = "AndrisWillow/lmsys-500k-Llama3.2_chat_format",
+    fineweb_name: str = "AndrisWillow/pile-500k",
 ):
     """
     Load the saved activations of the base and instruct models for a given layer

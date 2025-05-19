@@ -339,6 +339,7 @@ if __name__ == "__main__":
     )
     MODEL_HOOKPOINT = "blocks.13.hook_resid_pre"
     print("Loading tokens")
+    # TODO load pretokenized dataset for training and validation
     all_tokens= load_pretokenized_HF_dataset(args.hf_dataset_name, args.hf_profile_name) # add as params or from constants?
     buffer_cfg = {
         "seq_len": 1024, # Maximum context length the model is trained on; More would be better

@@ -109,6 +109,7 @@ if __name__ == "__main__":
         attn_implementation=MODEL_CONFIGS[args.model]["attn_implementation"],
     )
     tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer.pad_token = tokenizer.eos_token # Need to add padding token
     nnmodel = LanguageModel(model, tokenizer=tokenizer)
     print("dtype=",nnmodel.dtype)
     num_layers = int(len(nnmodel.model.layers))
