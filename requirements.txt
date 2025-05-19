@@ -13,3 +13,4 @@ kaleido
 wandb
 loguru
 pytest
+transformer-lens==2.15.0

@@ -135,10 +135,10 @@ def main():
     parser = ArgumentParser(description='Compute positive and maximum activations for latent features')
     parser.add_argument("--activation-store-dir", type=str, default="/workspace/data/activations/")
     parser.add_argument("--indices-root", type=str, default="/workspace/data/latent_indices/")
-    parser.add_argument("--base-model", type=str, default="google/gemma-2-2b")
-    parser.add_argument("--chat-model", type=str, default="google/gemma-2-2b-it")
+    parser.add_argument("--base-model", type=str, default="meta-llama/Llama-3.2-1B")
+    parser.add_argument("--chat-model", type=str, default="meta-llama/Llama-3.2-1B-Instruct")
     parser.add_argument("--layer", type=int, default=13)
-    parser.add_argument("--dictionary-model", type=str, required=True)
+    parser.add_argument("--dictionary-model", type=str, required=True) # TODO the only thing that needs to be passed to launch script
     parser.add_argument("--target-set", type=str, nargs='+', default=[])
     parser.add_argument("--latent-activations-dir", type=str, default="/workspace/data/latent_activations/")
     parser.add_argument("--upload-to-hub", action="store_true")
@@ -147,10 +147,11 @@ def main():
     args = parser.parse_args()
 
     # Load the activation dataset
+    # TODO need to modify this for Llama
     if not args.from_hub:
         fineweb_cache, lmsys_cache = load_activation_dataset(
             activation_store_dir=args.activation_store_dir,
-            base_model=args.base_model.split("/")[-1], 
+            base_model=args.base_model.split("/")[-1], # why these splits?
             instruct_model=args.chat_model.split("/")[-1],
             layer=args.layer,
             split=args.split,
@@ -159,6 +160,7 @@ def main():
         tokens_lmsys = lmsys_cache.tokens[0]
 
         # Load the dictionary model
+        # TODO check if loading local or from HF
         dictionary_model = load_dictionary_model(args.dictionary_model).to("cuda")
 
         # Load the tokenizer

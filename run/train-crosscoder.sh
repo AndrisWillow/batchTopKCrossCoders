@@ -3,15 +3,15 @@
 set -x
 
 SPLIT=train
-BATCH_SIZE=2048
-WORKERS=32
+BATCH_SIZE=4096 # 4096
 # Model configuration
 ACTIVATION_DIR="$DATASTORE/activations/"
 LAYER=13
-BASE_MODEL="google/gemma-2-2b"
-INSTRUCT_MODEL="google/gemma-2-2b-it"
+# Loading from buffer instead
+BASE_MODEL="Qwen/Qwen2.5-0.5B"
+INSTRUCT_MODEL="Qwen/Qwen2.5-0.5B-Instruct"
 DEVICE="cuda"
-LR=1e-4
+LR=5e-5
 MU=0.041
 
 # Parse command line arguments to check for custom mu value
@@ -32,11 +32,16 @@ FLAGS="--activation-store-dir $ACTIVATION_DIR \
 --same-init-for-all-layers \
 --lr $LR \
 --init-with-transpose \
---validate-every-n-steps 20_000 \
---epochs 2 \
---local-shuffling \
 --seed 42 \
---num-samples 100_000_000"
+--use-buffer \
+--k 50 \
+--num-samples 400_000_000 \
+--type batch-top-k \
+--expansion-factor 8 \
+--activation-dimension 896 \
+--num-validation-samples 2_000_000" # 400_000_000
+
+
 
 # Only add default mu if not provided in command line arguments
 if [ "$custom_mu" = false ]; then

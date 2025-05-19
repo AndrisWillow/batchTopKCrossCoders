@@ -22,6 +22,7 @@ from tools.cache_utils import LatentActivationCache
 
 
 @th.no_grad()
+# TODO implement computations from Pretokenized dataset instead
 def compute_max_activation_from_latent_cache(
     latent_cache: LatentActivationCache,
     device,
@@ -119,6 +120,8 @@ if __name__ == "__main__":
     results = {}
 
     # Use LatentActivationCache if path is provided
+    # TODO generate some validation acts?
+    
     if args.latent_activation_cache_path:
         print(f"Using LatentActivationCache from {args.latent_activation_cache_path}")
         split = "validation"
@@ -138,6 +141,7 @@ if __name__ == "__main__":
             "max_activations": max_activations.tolist(),
         }
     # Otherwise use the original PairedActivationCache approach
+    # TODO modify this to use our models
     else:
         print("Using PairedActivationCache")
         crosscoder = load_dictionary_model(args.crosscoder).to(args.device)
