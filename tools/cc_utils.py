@@ -51,7 +51,6 @@ def load_latent_df(crosscoder_or_path=None):
         # Local model
         df_path = Path(crosscoder_or_path)
     else:
-        print("accessing online repo")
         repo_id = f"AndrisWillow/diffing-stats-{crosscoder_or_path}"
         try:
             df_path = hf_hub_download(
@@ -527,15 +526,15 @@ def online_dashboard(
                 max_acts = df[col].dropna().to_dict()
                 break
     base_model = load_model(
-        "google/gemma-2-2b",
+        "meta-llama/Llama-3.2-1B",
         torch_dtype=torch_dtype,
-        attn_implementation="eager",
+        # attn_implementation="eager",
         device_map=base_device,
     )
     chat_model = load_model(
-        "google/gemma-2-2b-it",
+        "meta-llama/Llama-3.2-1B-Instruct",
         torch_dtype=torch_dtype,
-        attn_implementation="eager",
+        # attn_implementation="eager",
         device_map=chat_device,
     )
     return CrosscoderOnlineFeatureDashboard(
@@ -753,14 +752,19 @@ def offline_dashboard(crosscoder, max_example_per_quantile=20, tokenizer=None):
     return dashboard
 
 
-def get_available_models():
+def get_available_models(author):
     """Fetch CrossCoder models from Hugging Face"""
     try:
         # Initialize the Hugging Face API
         api = HfApi()
 
+<<<<<<< HEAD
         # Get models from the AndrisWillow organization
         models = api.list_models(author="AndrisWillow")
+=======
+        # Get models from the science-of-finetuning organization
+        models = api.list_models(author=author)
+>>>>>>> ad87a96f7cf12c20c3d6dc4c5863e268b8fefa13
 
         # Filter for CrossCoder models (you may need to adjust this filter)
         crosscoder_models = [model.id.split("/")[-1] for model in models]
